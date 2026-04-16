@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ServiceTrade — Campaign-Level Performance Analysis</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous"></script>
+<style>
+  :root {
+    --blue: #1B3A5C; --med-blue: #4472C4; --light-blue: #D6E4F0;
+    --green: #10B981; --red: #EF4444; --amber: #F59E0B; --purple: #7C3AED;
+    --gray-50: #F9FAFB; --gray-100: #F3F4F6; --gray-200: #E5E7EB;
+    --gray-300: #D1D5DB; --gray-600: #4B5563; --gray-800: #1F2937;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--gray-50); color: var(--gray-800); }
+  .header { background: linear-gradient(135deg, var(--blue) 0%, #2A5A8C 100%); color: white; padding: 32px 40px; }
+  .header h1 { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
+  .header p { font-size: 14px; opacity: 0.8; }
+  .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+  .section-title { font-size: 20px; font-weight: 700; color: var(--blue); margin: 32px 0 16px; padding-bottom: 8px; border-bottom: 3px solid var(--med-blue); }
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 28px; }
+  .kpi-card { background: white; border-radius: 10px; padding: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 4px solid var(--med-blue); }
+  .kpi-card.green { border-left-color: var(--green); }
+  .kpi-card.red { border-left-color: var(--red); }
+  .kpi-card.purple { border-left-color: var(--purple); }
+  .kpi-card.amber { border-left-color: var(--amber); }
+  .kpi-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--gray-600); margin-bottom: 4px; }
+  .kpi-value { font-size: 28px; font-weight: 700; color: var(--blue); }
+  .kpi-sub { font-size: 12px; color: var(--gray-600); margin-top: 2px; }
+  .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 28px; }
+  .chart-card { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .chart-card.full { grid-column: 1 / -1; }
+  .chart-card h3 { font-size: 15px; font-weight: 600; color: var(--blue); margin-bottom: 4px; }
+  .chart-card .subtitle { font-size: 12px; color: var(--gray-600); margin-bottom: 12px; }
+  .chart-wrap { position: relative; height: 340px; }
+  .chart-wrap.tall { height: 420px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: var(--blue); color: white; padding: 10px 8px; text-align: center; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; position: sticky; top: 0; }
+  th:first-child { text-align: left; }
+  td { padding: 9px 8px; text-align: center; border-bottom: 1px solid var(--gray-200); }
+  td:first-child { text-align: left; font-weight: 600; }
+  tr:nth-child(even) { background: var(--gray-100); }
+  tr:hover { background: var(--light-blue); }
+  tr.total-row { background: var(--light-blue) !important; font-weight: 700; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .badge-green { background: #D1FAE5; color: #065F46; }
+  .badge-red { background: #FEE2E2; color: #991B1B; }
+  .badge-amber { background: #FEF3C7; color: #92400E; }
+  .badge-blue { background: #DBEAFE; color: #1E40AF; }
+  .badge-purple { background: #EDE9FE; color: #5B21B6; }
+  .badge-gray { background: #F3F4F6; color: #4B5563; }
+  .insight-box { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 16px; border-left: 4px solid var(--purple); }
+  .insight-box h4 { color: var(--purple); font-size: 14px; margin-bottom: 6px; }
+  .insight-box p { font-size: 13px; color: var(--gray-600); line-height: 1.5; }
+  .consol-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .consol-card { background: white; border-radius: 10px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .consol-card h4 { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+  .consol-card.keep { border-top: 4px solid var(--green); }
+  .consol-card.keep h4 { color: var(--green); }
+  .consol-card.optimize { border-top: 4px solid var(--amber); }
+  .consol-card.optimize h4 { color: var(--amber); }
+  .consol-card.cut { border-top: 4px solid var(--red); }
+  .consol-card.cut h4 { color: var(--red); }
+  .consol-card ul { font-size: 12px; color: var(--gray-600); list-style: none; padding: 0; }
+  .consol-card ul li { padding: 4px 0; border-bottom: 1px solid var(--gray-100); }
+  .consol-card ul li:last-child { border: none; }
+  .consol-card .metric { font-weight: 600; color: var(--gray-800); }
+  @media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } .consol-grid { grid-template-columns: 1fr; } }
+  @media print { .header { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>ServiceTrade — Campaign-Level Performance Analysis</h1>
+  <p>MQL Cohort Date: June 2025 – April 2026 &nbsp;|&nbsp; Full Funnel: MQLs → SQLs → SQOs &nbsp;|&nbsp; Prepared by MarketWake &nbsp;|&nbsp; April 2026</p>
+</div>
+<div class="container">
+
+<!-- KPI ROW -->
+<div class="kpi-row">
+  <div class="kpi-card"><div class="kpi-label">Active Campaigns</div><div class="kpi-value">13</div><div class="kpi-sub">across 4 channels</div></div>
+  <div class="kpi-card green"><div class="kpi-label">Top Campaign SQOs</div><div class="kpi-value">42</div><div class="kpi-sub">ServiceTrade Brand (67% of all)</div></div>
+  <div class="kpi-card purple"><div class="kpi-label">Best MQL→SQO Rate</div><div class="kpi-value">21.5%</div><div class="kpi-sub">ServiceTrade Brand</div></div>
+  <div class="kpi-card red"><div class="kpi-label">Zero-SQO Campaigns</div><div class="kpi-value">7</div><div class="kpi-sub">of 13 campaigns (54%)</div></div>
+  <div class="kpi-card amber"><div class="kpi-label">Top 4 = % of SQOs</div><div class="kpi-value">89%</div><div class="kpi-sub">Brand + Fire Prot + HVAC + Comp Search</div></div>
+</div>
+
+<!-- SECTION 1: CAMPAIGN SUMMARY TABLE -->
+<h2 class="section-title">1. Campaign Performance Summary</h2>
+<div class="chart-card full" style="overflow-x:auto;">
+  <h3>Full-Funnel Metrics by Campaign</h3>
+  <div class="subtitle">Cohorted by MQL date, Jun 2025 – Apr 2026. Sorted by SQO impact.</div>
+  <table id="summaryTable">
+    <thead><tr>
+      <th>Campaign</th><th>Channel</th><th>MQLs</th><th>SQLs</th><th>MQL→SQL</th><th>SQOs</th><th>SQL→SQO</th><th>MQL→SQO</th><th>Tier A+B %</th><th>Assessment</th>
+    </tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<!-- SECTION 2: VOLUME OVER TIME -->
+<h2 class="section-title">2. MQL Volume by Campaign Over Time</h2>
+<div class="chart-grid">
+  <div class="chart-card full">
+    <h3>Monthly MQL Production by Campaign</h3>
+    <div class="subtitle">Stacked area chart showing which campaigns drive volume each month</div>
+    <div class="chart-wrap tall"><canvas id="mqls-stacked"></canvas></div>
+  </div>
+</div>
+
+<!-- SECTION 3: FUNNEL EFFICIENCY -->
+<h2 class="section-title">3. Funnel Efficiency by Campaign</h2>
+<div class="chart-grid">
+  <div class="chart-card">
+    <h3>MQL→SQL Conversion Rate</h3>
+    <div class="subtitle">Only campaigns with ≥ 5 MQLs shown</div>
+    <div class="chart-wrap"><canvas id="sql-conv-bar"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <h3>Full-Funnel: MQL→SQO Throughput</h3>
+    <div class="subtitle">% of MQLs that became Sales Qualified Opportunities</div>
+    <div class="chart-wrap"><canvas id="sqo-throughput-bar"></canvas></div>
+  </div>
+  <div class="chart-card full">
+    <h3>Volume vs. Efficiency Bubble Chart</h3>
+    <div class="subtitle">X = MQLs, Y = MQL→SQL %, Bubble size = SQOs. Campaigns in upper-right are both high-volume and high-quality.</div>
+    <div class="chart-wrap tall"><canvas id="bubble-chart"></canvas></div>
+  </div>
+</div>
+
+<!-- SECTION 4: SQO CONCENTRATION -->
+<h2 class="section-title">4. SQO Concentration & Pipeline Impact</h2>
+<div class="chart-grid">
+  <div class="chart-card">
+    <h3>SQO Distribution by Campaign</h3>
+    <div class="subtitle">Where are qualified opportunities actually coming from?</div>
+    <div class="chart-wrap"><canvas id="sqo-doughnut"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <h3>SQO Production Over Time (Top 4)</h3>
+    <div class="subtitle">Monthly SQO count for the campaigns that produce opportunities</div>
+    <div class="chart-wrap"><canvas id="sqo-timeline"></canvas></div>
+  </div>
+</div>
+
+<!-- SECTION 5: TIER QUALITY -->
+<h2 class="section-title">5. Lead Quality by Campaign (Tier A+B %)</h2>
+<div class="chart-grid">
+  <div class="chart-card full">
+    <h3>Tier A+B Composition by Campaign</h3>
+    <div class="subtitle">Higher Tier A+B % indicates better prospect quality. Campaigns below 30% are dominated by lower-value Tier C leads.</div>
+    <div class="chart-wrap"><canvas id="tier-bar"></canvas></div>
+  </div>
+</div>
+
+<!-- SECTION 6: TREND ANALYSIS -->
+<h2 class="section-title">6. Campaign Trend Analysis</h2>
+<div class="chart-grid">
+  <div class="chart-card">
+    <h3>ServiceTrade Brand (Search) Trend</h3>
+    <div class="subtitle">The #1 SQO producer — tracking volume and conversion</div>
+    <div class="chart-wrap"><canvas id="brand-trend"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <h3>Meta Demo Requests Combined Trend</h3>
+    <div class="subtitle">Mechanical + Fire Demo Requests — high volume, low conversion</div>
+    <div class="chart-wrap"><canvas id="meta-demo-trend"></canvas></div>
+  </div>
+</div>
+
+<!-- SECTION 7: CONSOLIDATION RECOMMENDATIONS -->
+<h2 class="section-title">7. Consolidation & Investment Recommendations</h2>
+
+<div class="insight-box">
+  <h4>Key Finding: Extreme SQO Concentration</h4>
+  <p>Just 4 of 13 campaigns (31%) produce 89% of all SQOs. ServiceTrade Brand alone drives 67% of pipeline opportunities (42 of 63). Meanwhile, 7 campaigns (54%) have produced zero SQOs — representing spend that doesn't convert to pipeline. This concentration creates both risk (Brand dependency) and opportunity (reallocation headroom).</p>
+</div>
+
+<div class="consol-grid">
+  <div class="consol-card keep">
+    <h4>SCALE — High Performers</h4>
+    <ul>
+      <li><span class="metric">ServiceTrade Brand</span> — 42 SQOs, 21.5% MQL→SQO. Best full-funnel campaign. Increase branded search budget to capture more high-intent demand.</li>
+      <li><span class="metric">Fire Protection</span> — 6 SQOs, 15.4% MQL→SQO, 51.3% MQL→SQL. Strong conversion at every stage. Scale search budget.</li>
+      <li><span class="metric">Competitive Search</span> — 4 SQOs, 14.8% MQL→SQO. Growing MQL trend (1→6→5/month). Invest in expansion keywords.</li>
+      <li><span class="metric">Commercial HVAC</span> — 4 SQOs, 9.8% MQL→SQO, 36.4% SQL→SQO rate. Solid mid-funnel performance. Scale where possible.</li>
+    </ul>
+  </div>
+  <div class="consol-card optimize">
+    <h4>OPTIMIZE — Fix or Pivot</h4>
+    <ul>
+      <li><span class="metric">Fire Demo Request</span> — 143 MQLs but only 4 SQOs (2.8% throughput). Huge volume with leaky funnel. Add qualification questions or tighten targeting.</li>
+      <li><span class="metric">Mechanical Demo Request</span> — 175 MQLs, 3 SQOs (1.7% throughput). Worst efficiency among major campaigns. Qualification overhaul needed before more spend.</li>
+      <li><span class="metric">Retargeting</span> — Small sample (6 MQLs, 3 SQLs) but 50% MQL→SQL shows promise. Needs scale to validate.</li>
+    </ul>
+  </div>
+  <div class="consol-card cut">
+    <h4>CONSOLIDATE / CUT</h4>
+    <ul>
+      <li><span class="metric">User Conference GDN</span> — 13 MQLs, 0 SQLs, 0 SQOs. One-time event campaign with zero pipeline impact. Discontinue.</li>
+      <li><span class="metric">DSA Test</span> — 9 MQLs, 0 SQLs, 0 SQOs, 0% Tier A+B. Pure Tier C leads with zero conversion. Cut or dramatically restructure.</li>
+      <li><span class="metric">Core Services</span> — 3 MQLs, 0 SQLs. Insufficient volume and no pipeline signal. Consolidate into Brand or Competitive Search.</li>
+      <li><span class="metric">Demand Gen / Awareness</span> — 2 MQLs each, 0 SQOs. Negligible impact. Reallocate budget to proven campaigns.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="insight-box" style="border-left-color: var(--amber);">
+  <h4>Consolidation Impact Estimate</h4>
+  <p>Cutting the 5 zero-performing campaigns and reallocating their budget to Brand, Fire Protection, Competitive Search, and Commercial HVAC could yield an estimated <strong>8–12 additional SQOs per quarter</strong> based on those campaigns' historical conversion rates. The Meta Demo Request campaigns (318 combined MQLs) need qualification gates — even a modest improvement from 2.2% to 5% MQL→SQO throughput would add ~7 SQOs from existing spend.</p>
+</div>
+
+</div><!-- /container -->
+
+<script>
+// ============================================================
+// DATA
+// ============================================================
+const MONTHS = ['Jun \'25','Jul \'25','Aug \'25','Sep \'25','Oct \'25','Nov \'25','Dec \'25','Jan \'26','Feb \'26','Mar \'26','Apr \'26'];
+const MONTH_KEYS = ['2025|06','2025|07','2025|08','2025|09','2025|10','2025|11','2025|12','2026|01','2026|02','2026|03','2026|04'];
+
+const campaigns = [
+  { name:'ServiceTrade Brand', source:'google/bing', mqls:195, sqls:130, sqos:42, tierAB:58, tierC:137,
+    monthly:[{m:0,s:0,o:0},{m:0,s:0,o:0},{m:15,s:9,o:5},{m:26,s:18,o:9},{m:25,s:17,o:4},{m:22,s:16,o:4},{m:27,s:21,o:7},{m:21,s:14,o:6},{m:21,s:15,o:6},{m:34,s:16,o:0},{m:4,s:4,o:1}]},
+  { name:'Mechanical Demo Request', source:'meta', mqls:175, sqls:19, sqos:3, tierAB:56, tierC:117,
+    monthly:[{m:6,s:1,o:0},{m:17,s:2,o:0},{m:13,s:0,o:0},{m:10,s:1,o:1},{m:30,s:2,o:0},{m:50,s:9,o:1},{m:33,s:1,o:0},{m:11,s:1,o:0},{m:4,s:2,o:1},{m:1,s:0,o:0},{m:0,s:0,o:0}]},
+  { name:'Fire Demo Request', source:'meta', mqls:143, sqls:27, sqos:4, tierAB:40, tierC:101,
+    monthly:[{m:6,s:1,o:0},{m:20,s:5,o:2},{m:33,s:4,o:0},{m:3,s:2,o:1},{m:11,s:3,o:1},{m:26,s:2,o:0},{m:27,s:8,o:0},{m:8,s:2,o:0},{m:8,s:0,o:0},{m:1,s:0,o:0},{m:0,s:0,o:0}]},
+  { name:'Commercial HVAC', source:'google/bing', mqls:41, sqls:11, sqos:4, tierAB:15, tierC:26,
+    monthly:[{m:0,s:0,o:0},{m:0,s:0,o:0},{m:5,s:2,o:1},{m:8,s:2,o:1},{m:5,s:0,o:0},{m:4,s:2,o:0},{m:6,s:1,o:1},{m:11,s:4,o:1},{m:2,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0}]},
+  { name:'Fire Protection', source:'google/bing', mqls:39, sqls:20, sqos:6, tierAB:17, tierC:21,
+    monthly:[{m:0,s:0,o:0},{m:0,s:0,o:0},{m:3,s:2,o:0},{m:8,s:5,o:2},{m:8,s:5,o:2},{m:2,s:0,o:0},{m:6,s:4,o:1},{m:5,s:3,o:0},{m:3,s:1,o:1},{m:4,s:0,o:0},{m:0,s:0,o:0}]},
+  { name:'Competitive Search', source:'google/bing', mqls:27, sqls:12, sqos:4, tierAB:8, tierC:19,
+    monthly:[{m:0,s:0,o:0},{m:0,s:0,o:0},{m:1,s:1,o:0},{m:1,s:1,o:0},{m:1,s:0,o:0},{m:6,s:4,o:2},{m:3,s:0,o:0},{m:6,s:1,o:1},{m:4,s:3,o:1},{m:5,s:2,o:0},{m:0,s:0,o:0}]},
+  { name:'User Conference GDN', source:'google', mqls:13, sqls:0, sqos:0, tierAB:0, tierC:13,
+    monthly:[{m:0,s:0,o:0},{m:0,s:0,o:0},{m:13,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0}]},
+  { name:'DSA Test', source:'google', mqls:9, sqls:0, sqos:0, tierAB:0, tierC:8,
+    monthly:[{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:7,s:0,o:0},{m:0,s:0,o:0},{m:2,s:0,o:0},{m:0,s:0,o:0}]},
+  { name:'Retargeting', source:'meta', mqls:6, sqls:3, sqos:0, tierAB:1, tierC:5,
+    monthly:[{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:1,s:1,o:0},{m:2,s:1,o:0},{m:0,s:0,o:0},{m:2,s:1,o:0},{m:0,s:0,o:0},{m:1,s:0,o:0}]},
+  { name:'Core Services', source:'google', mqls:3, sqls:0, sqos:0, tierAB:0, tierC:3,
+    monthly:[{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:2,s:0,o:0},{m:1,s:0,o:0},{m:0,s:0,o:0}]},
+  { name:'Demand Gen', source:'google', mqls:2, sqls:0, sqos:0, tierAB:1, tierC:1,
+    monthly:[{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:2,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0}]},
+  { name:'Awareness', source:'meta', mqls:2, sqls:0, sqos:0, tierAB:0, tierC:1,
+    monthly:[{m:0,s:0,o:0},{m:1,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:1,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0}]},
+  { name:'Demo Request', source:'linkedin', mqls:1, sqls:1, sqos:0, tierAB:0, tierC:1,
+    monthly:[{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:0,s:0,o:0},{m:1,s:1,o:0},{m:0,s:0,o:0}]},
+];
+
+const COLORS = ['#4472C4','#ED7D31','#FFC000','#70AD47','#5B9BD5','#7C3AED','#44546A','#FF6384','#36A2EB','#FFCE56','#9966FF','#C9CBCF','#FF9F40'];
+const pct = (n,d) => d > 0 ? (n/d*100).toFixed(1)+'%' : '0.0%';
+const channelBadge = (src) => {
+  if (src.includes('google') && src.includes('bing')) return '<span class="badge badge-blue">Search</span>';
+  if (src.includes('google')) return '<span class="badge badge-blue">Google</span>';
+  if (src.includes('meta')) return '<span class="badge badge-purple">Meta</span>';
+  if (src.includes('bing')) return '<span class="badge badge-green">Bing</span>';
+  if (src.includes('linkedin')) return '<span class="badge badge-amber">LinkedIn</span>';
+  return '<span class="badge badge-gray">'+src+'</span>';
+};
+const assessBadge = (c) => {
+  if (c.sqos >= 4) return '<span class="badge badge-green">Scale</span>';
+  if (c.sqos > 0 && c.sqos < 4 && c.mqls >= 20) return '<span class="badge badge-amber">Optimize</span>';
+  if (c.sqos > 0 && c.mqls < 20) return '<span class="badge badge-blue">Monitor</span>';
+  if (c.sqos === 0 && c.sqls > 0) return '<span class="badge badge-amber">Optimize</span>';
+  if (c.sqos === 0 && c.mqls >= 5) return '<span class="badge badge-red">Cut / Pivot</span>';
+  return '<span class="badge badge-gray">Low Volume</span>';
+};
+
+// ============================================================
+// 1. SUMMARY TABLE
+// ============================================================
+const tbody = document.querySelector('#summaryTable tbody');
+const sortedBySqo = [...campaigns].sort((a,b) => b.sqos - a.sqos || b.sqls - a.sqls || b.mqls - a.mqls);
+let totals = {mqls:0,sqls:0,sqos:0,tierAB:0,tierC:0};
+sortedBySqo.forEach(c => {
+  totals.mqls += c.mqls; totals.sqls += c.sqls; totals.sqos += c.sqos; totals.tierAB += c.tierAB; totals.tierC += c.tierC;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td>${c.name}</td><td>${channelBadge(c.source)}</td><td>${c.mqls}</td><td>${c.sqls}</td><td>${pct(c.sqls,c.mqls)}</td><td><strong>${c.sqos}</strong></td><td>${pct(c.sqos,c.sqls)}</td><td><strong>${pct(c.sqos,c.mqls)}</strong></td><td>${Math.round(c.tierAB/(c.tierAB+c.tierC)*100)||0}%</td><td>${assessBadge(c)}</td>`;
+  tbody.appendChild(tr);
+});
+const totalTr = document.createElement('tr');
+totalTr.className = 'total-row';
+totalTr.innerHTML = `<td>TOTAL</td><td></td><td>${totals.mqls}</td><td>${totals.sqls}</td><td>${pct(totals.sqls,totals.mqls)}</td><td><strong>${totals.sqos}</strong></td><td>${pct(totals.sqos,totals.sqls)}</td><td><strong>${pct(totals.sqos,totals.mqls)}</strong></td><td>${Math.round(totals.tierAB/(totals.tierAB+totals.tierC)*100)}%</td><td></td>`;
+tbody.appendChild(totalTr);
+
+// ============================================================
+// 2. STACKED AREA — MQLs by Campaign Over Time
+// ============================================================
+const topCampaigns = campaigns.filter(c => c.mqls >= 6);
+new Chart(document.getElementById('mqls-stacked'), {
+  type: 'bar',
+  data: {
+    labels: MONTHS,
+    datasets: topCampaigns.map((c, i) => ({
+      label: c.name,
+      data: c.monthly.map(d => d.m),
+      backgroundColor: COLORS[i] + 'CC',
+      borderColor: COLORS[i],
+      borderWidth: 1,
+    }))
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    scales: { x: { stacked: true }, y: { stacked: true, title: { display: true, text: 'MQLs' } } },
+    plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+      tooltip: { mode: 'index' } }
+  }
+});
+
+// ============================================================
+// 3a. SQL Conversion Bar
+// ============================================================
+const sigCampaigns = campaigns.filter(c => c.mqls >= 5).sort((a,b) => b.sqls/b.mqls - a.sqls/a.mqls);
+new Chart(document.getElementById('sql-conv-bar'), {
+  type: 'bar',
+  data: {
+    labels: sigCampaigns.map(c => c.name),
+    datasets: [{
+      label: 'MQL→SQL %',
+      data: sigCampaigns.map(c => (c.sqls/c.mqls*100).toFixed(1)),
+      backgroundColor: sigCampaigns.map(c => c.sqls/c.mqls > 0.4 ? '#10B981CC' : c.sqls/c.mqls > 0.15 ? '#F59E0BCC' : '#EF4444CC'),
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+    scales: { x: { title: { display: true, text: 'MQL→SQL %' }, max: 100 } },
+    plugins: { legend: { display: false } }
+  }
+});
+
+// ============================================================
+// 3b. SQO Throughput Bar
+// ============================================================
+new Chart(document.getElementById('sqo-throughput-bar'), {
+  type: 'bar',
+  data: {
+    labels: sigCampaigns.map(c => c.name),
+    datasets: [{
+      label: 'MQL→SQO %',
+      data: sigCampaigns.map(c => (c.sqos/c.mqls*100).toFixed(1)),
+      backgroundColor: sigCampaigns.map(c => c.sqos/c.mqls > 0.10 ? '#7C3AEDCC' : c.sqos/c.mqls > 0.02 ? '#F59E0BCC' : '#EF4444CC'),
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+    scales: { x: { title: { display: true, text: 'MQL→SQO %' }, max: 25 } },
+    plugins: { legend: { display: false } }
+  }
+});
+
+// ============================================================
+// 3c. Bubble Chart — Volume vs Efficiency
+// ============================================================
+const bubbleCampaigns = campaigns.filter(c => c.mqls >= 3);
+new Chart(document.getElementById('bubble-chart'), {
+  type: 'bubble',
+  data: {
+    datasets: bubbleCampaigns.map((c, i) => ({
+      label: c.name,
+      data: [{ x: c.mqls, y: (c.sqls/c.mqls*100), r: Math.max(c.sqos * 3 + 4, 5) }],
+      backgroundColor: COLORS[i] + '99',
+      borderColor: COLORS[i],
+      borderWidth: 2,
+    }))
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    scales: {
+      x: { title: { display: true, text: 'Total MQLs' }, min: 0 },
+      y: { title: { display: true, text: 'MQL→SQL %' }, min: 0, max: 80 }
+    },
+    plugins: {
+      legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } },
+      tooltip: { callbacks: { label: (ctx) => {
+        const c = bubbleCampaigns[ctx.datasetIndex];
+        return `${c.name}: ${c.mqls} MQLs, ${(c.sqls/c.mqls*100).toFixed(1)}% SQL, ${c.sqos} SQOs`;
+      }}}
+    }
+  }
+});
+
+// ============================================================
+// 4a. SQO Doughnut
+// ============================================================
+const sqoCampaigns = campaigns.filter(c => c.sqos > 0);
+const noSqoCount = campaigns.filter(c => c.sqos === 0).reduce((a,c) => a + c.mqls, 0);
+new Chart(document.getElementById('sqo-doughnut'), {
+  type: 'doughnut',
+  data: {
+    labels: [...sqoCampaigns.map(c => c.name), 'Zero-SQO Campaigns'],
+    datasets: [{
+      data: [...sqoCampaigns.map(c => c.sqos), 0],
+      backgroundColor: ['#4472C4','#70AD47','#FFC000','#ED7D31','#5B9BD5','#7C3AED','#C9CBCF'],
+      borderWidth: 2,
+      borderColor: '#fff',
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'right', labels: { font: { size: 11 }, boxWidth: 14 } },
+      tooltip: { callbacks: { label: (ctx) => {
+        const v = ctx.parsed;
+        return `${ctx.label}: ${v} SQOs (${(v/63*100).toFixed(0)}%)`;
+      }}}
+    }
+  }
+});
+
+// ============================================================
+// 4b. SQO Timeline (Top 4)
+// ============================================================
+const top4Sqo = campaigns.filter(c => c.sqos >= 4);
+new Chart(document.getElementById('sqo-timeline'), {
+  type: 'line',
+  data: {
+    labels: MONTHS,
+    datasets: top4Sqo.map((c, i) => ({
+      label: c.name,
+      data: c.monthly.map(d => d.o),
+      borderColor: COLORS[i],
+      backgroundColor: COLORS[i] + '33',
+      fill: false,
+      tension: 0.3,
+      pointRadius: 4,
+      borderWidth: 2,
+    }))
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    scales: { y: { title: { display: true, text: 'SQOs' }, beginAtZero: true } },
+    plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } }
+  }
+});
+
+// ============================================================
+// 5. Tier A+B Bar
+// ============================================================
+const tierCampaigns = campaigns.filter(c => c.mqls >= 5).sort((a,b) => (b.tierAB/(b.tierAB+b.tierC)) - (a.tierAB/(a.tierAB+a.tierC)));
+new Chart(document.getElementById('tier-bar'), {
+  type: 'bar',
+  data: {
+    labels: tierCampaigns.map(c => c.name),
+    datasets: [
+      { label: 'Tier A+B', data: tierCampaigns.map(c => c.tierAB), backgroundColor: '#10B981CC', borderRadius: 4 },
+      { label: 'Tier C', data: tierCampaigns.map(c => c.tierC), backgroundColor: '#EF4444CC', borderRadius: 4 },
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    scales: { x: { stacked: true }, y: { stacked: true, title: { display: true, text: 'MQLs by Tier' } } },
+    plugins: { legend: { position: 'bottom' } }
+  }
+});
+
+// ============================================================
+// 6a. Brand Trend
+// ============================================================
+const brand = campaigns.find(c => c.name === 'ServiceTrade Brand');
+new Chart(document.getElementById('brand-trend'), {
+  type: 'bar',
+  data: {
+    labels: MONTHS,
+    datasets: [
+      { label: 'MQLs', data: brand.monthly.map(d => d.m), backgroundColor: '#4472C4CC', borderRadius: 3, order: 2 },
+      { label: 'SQLs', data: brand.monthly.map(d => d.s), backgroundColor: '#70AD47CC', borderRadius: 3, order: 2 },
+      { label: 'SQOs', data: brand.monthly.map(d => d.o), type: 'line', borderColor: '#7C3AED', backgroundColor: '#7C3AED33', fill: false, tension: 0.3, pointRadius: 5, borderWidth: 2.5, order: 1 },
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    scales: { y: { beginAtZero: true, title: { display: true, text: 'Count' } } },
+    plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } }
+  }
+});
+
+// ============================================================
+// 6b. Meta Demo Trend (Combined)
+// ============================================================
+const mech = campaigns.find(c => c.name === 'Mechanical Demo Request');
+const fire = campaigns.find(c => c.name === 'Fire Demo Request');
+new Chart(document.getElementById('meta-demo-trend'), {
+  type: 'bar',
+  data: {
+    labels: MONTHS,
+    datasets: [
+      { label: 'Combined MQLs', data: MONTHS.map((_,i) => mech.monthly[i].m + fire.monthly[i].m), backgroundColor: '#ED7D31CC', borderRadius: 3, order: 2 },
+      { label: 'Combined SQLs', data: MONTHS.map((_,i) => mech.monthly[i].s + fire.monthly[i].s), backgroundColor: '#FFC000CC', borderRadius: 3, order: 2 },
+      { label: 'Combined SQOs', data: MONTHS.map((_,i) => mech.monthly[i].o + fire.monthly[i].o), type: 'line', borderColor: '#7C3AED', backgroundColor: '#7C3AED33', fill: false, tension: 0.3, pointRadius: 5, borderWidth: 2.5, order: 1 },
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    scales: { y: { beginAtZero: true, title: { display: true, text: 'Count' } } },
+    plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } }
+  }
+});
+
+</script>
+</body>
+</html>
